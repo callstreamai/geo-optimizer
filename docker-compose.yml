@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  geo-optimizer:
+    build: .
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
