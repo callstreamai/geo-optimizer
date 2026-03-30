@@ -12,14 +12,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN python -c "import nltk; nltk.download('punkt'); nltk.download('punkt_tab'); nltk.download('averaged_perceptron_tagger'); nltk.download('stopwords')"
+
+# Download NLTK data
+RUN python3 -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('punkt_tab', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True); nltk.download('stopwords', quiet=True)"
 
 # Copy application
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
-# Render uses PORT env variable (default 10000)
+# Render uses PORT env variable
 ENV PORT=10000
 EXPOSE 10000
 
-CMD python3 -c "import uvicorn; uvicorn.run('backend.server:app', host='0.0.0.0', port=int(__import__('os').environ.get('PORT', '10000')))"
+# Simple startup 
+COPY start.sh .
+RUN chmod +x start.sh
+CMD ["./start.sh"]

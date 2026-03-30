@@ -1,5 +1,5 @@
 """
-CallStreamAI - LLM SEO / GEO Optimizer API Server v2
+CallStreamAI - GEO Scanner API Server
 """
 import asyncio
 import json
@@ -14,21 +14,34 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Handle both direct execution and module import
+if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent))
+    from analyzers.crawler import SiteCrawler
+    from analyzers.entity_analyzer import EntityAnalyzer
+    from analyzers.faq_analyzer import FAQAnalyzer
+    from analyzers.schema_analyzer import SchemaAnalyzer
+    from analyzers.content_analyzer import ContentAnalyzer
+    from analyzers.link_analyzer import LinkAnalyzer
+    from analyzers.remaining_analyzers import (
+        ScenarioAnalyzer, StructureAnalyzer, TechnicalAnalyzer,
+        TrustAnalyzer, GEOAnalyzer
+    )
+    from analyzers.scoring_engine import ScoringEngine
+else:
+    from backend.analyzers.crawler import SiteCrawler
+    from backend.analyzers.entity_analyzer import EntityAnalyzer
+    from backend.analyzers.faq_analyzer import FAQAnalyzer
+    from backend.analyzers.schema_analyzer import SchemaAnalyzer
+    from backend.analyzers.content_analyzer import ContentAnalyzer
+    from backend.analyzers.link_analyzer import LinkAnalyzer
+    from backend.analyzers.remaining_analyzers import (
+        ScenarioAnalyzer, StructureAnalyzer, TechnicalAnalyzer,
+        TrustAnalyzer, GEOAnalyzer
+    )
+    from backend.analyzers.scoring_engine import ScoringEngine
 
-from analyzers.crawler import SiteCrawler
-from analyzers.entity_analyzer import EntityAnalyzer
-from analyzers.faq_analyzer import FAQAnalyzer
-from analyzers.schema_analyzer import SchemaAnalyzer
-from analyzers.content_analyzer import ContentAnalyzer
-from analyzers.link_analyzer import LinkAnalyzer
-from analyzers.remaining_analyzers import (
-    ScenarioAnalyzer, StructureAnalyzer, TechnicalAnalyzer,
-    TrustAnalyzer, GEOAnalyzer
-)
-from analyzers.scoring_engine import ScoringEngine
-
-app = FastAPI(title="CallStreamAI LLM SEO Optimizer")
+app = FastAPI(title="GEO Scanner by Call Stream AI")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,8 +51,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-frontend_path = Path(__file__).parent.parent / "frontend"
-app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
+# Determine frontend path based on execution context
+if __name__ == "__main__":
+    frontend_path = Path(__file__).parent.parent / "frontend"
+else:
+    frontend_path = Path(__file__).parent.parent / "frontend"
+
+if frontend_path.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 
 
 class AnalyzeRequest(BaseModel):
@@ -49,18 +68,19 @@ class AnalyzeRequest(BaseModel):
 
 @app.get("/")
 async def serve_frontend():
-    return FileResponse(str(frontend_path / "index.html"))
+    index_path = frontend_path / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {"message": "GEO Scanner API", "status": "running"}
 
 
 @app.post("/api/analyze")
 async def analyze_url(request: AnalyzeRequest):
     url = request.url.strip()
-    
     if not url.startswith("http"):
         url = "https://" + url
     
     try:
-        # Crawl
         crawler = SiteCrawler(url, timeout=30)
         crawl_data = await crawler.crawl()
         
@@ -70,7 +90,6 @@ async def analyze_url(request: AnalyzeRequest):
                 detail=f"Could not access {url}: {crawl_data.get('error', 'Unknown error')}. Make sure the URL is correct and the site is accessible."
             )
         
-        # Run all analyzers
         analyzers = [
             EntityAnalyzer(),
             FAQAnalyzer(),
@@ -91,7 +110,7 @@ async def analyze_url(request: AnalyzeRequest):
                 results.append(result)
             except Exception as e:
                 results.append({
-                    "name": getattr(analyzer, '__class__', type(analyzer)).__name__.replace("Analyzer", ""),
+                    "name": type(analyzer).__name__.replace("Analyzer", ""),
                     "icon": "⚠️",
                     "score": 0,
                     "weight": 0,
@@ -100,7 +119,6 @@ async def analyze_url(request: AnalyzeRequest):
                     "recommendations": []
                 })
         
-        # Calculate overall score
         engine = ScoringEngine()
         final_score = engine.calculate(results)
         
@@ -119,15 +137,15 @@ async def analyze_url(request: AnalyzeRequest):
     except HTTPException:
         raise
     except Exception as e:
-        tb = traceback.format_exc()
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "2.0"}
+    return {"status": "ok", "version": "2.0", "service": "GEO Scanner by Call Stream AI"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    import os; uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", "8081")))
+    port = int(os.environ.get("PORT", "8081"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
